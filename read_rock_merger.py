@@ -27,7 +27,7 @@ def read_tree(fname):
                     continue
                 else:
                     trees.append(np.vstack(thistree).T)
-                    print("Finished tree number {0}".format(treenums[-2]))
+                    # print("Finished tree number {0}".format(treenums[-2]))
                     thistree = []
             elif startedtrees:
                 thistree.append(np.asfarray(line.strip().split()))
@@ -48,7 +48,7 @@ def read_tree(fname):
 
 def save_to_hdf5(outname, colheads, trees, treenums, comments, tname):
     print("Saving data to {0} in file {1}".format(tname, outname))
-    f = h5py.File(outname, 'a')
+    f = h5py.File(outname, 'a', libver='latest')
     if tname in f.keys():
         print("File already contains a group named {0}, so I can't save to it."
               " Exiting.".format(tname))
@@ -56,10 +56,12 @@ def save_to_hdf5(outname, colheads, trees, treenums, comments, tname):
     t = f.create_group(tname)
     for c in comments:
         t.attrs[c] = -1
-    for i in range(len(treenums)):
-        tre = t.create_group('Tree_{0}'.format(treenums[i]))
-        for j in range(len(colheads)):
-            tre.create_dataset(colheads[j], data=trees[i][j])
+
+    for i, tnum in enumerate(treenums):
+        tre = t.create_group('Tree_' + str(tnum))
+        for j, col in enumerate(colheads):
+            dset = tre.create_dataset(col, trees[i][j].shape, 'f8')
+            dset = trees[i][j]  # noqa: F841
     f.close()
 
 
