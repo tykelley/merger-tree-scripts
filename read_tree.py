@@ -104,13 +104,11 @@ def main_trees_quick(df):
 
     Generally, this function will get most halos correctly marked as main
     progenitor halos. If a complete and accurate merger tree is required,
-    do not use this function. The functions `check_main_branches` and
-    `correct_mmp` can be used to improve accuracy.
+    combine this with `verify_main_branches` to ensure accuracy.
 
-    There may still be errors if there are two halos, both of maximal mass,
-    at the same timestep. This cannot be avoided while remaining quick, even
-    with the two functions mentioned above. It is caused by the equality
-    check within each tree and scale group.
+    The errors occur if there are two halos, both of maximal mass, at the
+    same timestep. This cannot be avoided while remaining quick due to the
+    equality used within each 'tree-scale' group.
 
     Parameters
     ----------
@@ -265,19 +263,24 @@ def read_data(fname, cols):
     return df
 
 
-def analyze_trees(fname, only_mb=False):
+def analyze_trees(fname, only_mb=False, slow_mb=False):
     """Processes a complete merger tree catalog."""
     cols = get_col_names(fname)
     tnums = get_tree_nums(fname)
     df = read_data(fname, cols)
     df['tree'] = make_tree_col(df, tnums)
-    df['TotalMass_mmp'] = 0
-    if have_pbar:
-        tnums = tqdm(tnums)
-    for tn in tnums:
-        mmps = main_trees(df.loc[df.tree == tn])
-        mmps = np.isin(df.loc[df.tree == tn].index, mmps)
-        df.loc[df.tree == tn, 'TotalMass_mmp'] = mmps
+    if slow_mb:
+        df['TotalMass_mmp'] = False
+        if have_pbar:
+            tnums = tqdm(tnums)
+        for tn in tnums:
+            mmps = main_trees(df.loc[df.tree == tn])
+            mmps = np.isin(df.loc[df.tree == tn].index, mmps)
+            df.loc[df.tree == tn, 'TotalMass_mmp'] = mmps
+    else:
+        df['TotalMass_mmp'] = main_trees_quick(df)
+
+    df = verify_main_branches(df)
     if only_mb:
         return df.loc[df.TotalMass_mmp == 1]
     return df
@@ -375,20 +378,14 @@ if __name__ == '__main__':
         help="Report timings of each function call",
     )
     parser.add_argument(
-        "-q",
-        "--quick",
+        "--slow",
         action="store_true",
-        help="Quickly define the main branches (less accurate)"
-    )
-    parser.add_argument(
-        "--verify",
-        action="store_true",
-        help="Verify the main branches. Improves accuracy of `--quick`."
+        help="Slowly define the main branches (ensures accuracy)"
     )
     args = parser.parse_args()
 
     start_time = time()
-    mt = analyze_trees(args.file, args.mb, args.quick)
+    mt = analyze_trees(args.file, args.mb, args.slow)
     cosmo = get_cosmo(args.file)
     save_to_hdf5(args.outname, mt, cosmo)
     add_z0_catalog(args.outname, mt)
