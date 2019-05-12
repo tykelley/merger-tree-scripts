@@ -132,7 +132,7 @@ def main_trees_quick(df):
 
 
 def correct_mmp(df, prev_id):
-    """Corrects the main branch to be all progenitors.
+    """Identifies the progenitor halos of the main branch.
 
     Starting at the prev_id, walk through the merger tree
     matching halos at the current timestep (a) with the
@@ -179,7 +179,7 @@ def correct_mmp(df, prev_id):
 
 
 def check_main_branches(df):
-    """Verifies that the main branch is comprised of progenitors.
+    """Checks that the main branch is comprised of progenitors.
 
     Examines the desc_id of all halos in the main branch and compares
     that to the next halo's halo_id. The first halo (descendant at a = 1)
@@ -214,6 +214,38 @@ def check_main_branches(df):
     else:
         # Return ID of the last correct halo
         return df.id.values[np.argmin(desc_ids == halo_ids)]
+
+
+def verify_main_branches(df):
+    """Verifies the accuracy of the main branches.
+
+    Checks that all of the halos within the main branch are progenitors of
+    each other. If they are not, identify the last progenitor and update the
+    main branch with the correct halos.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Complete merger tree, scale descending
+
+    Returns
+    -------
+    df : DataFrame
+        Updated merger tree catalog with the correct main branches marked
+    """
+    tnums = df.tree.unique()
+    if have_pbar:
+        tnums = tqdm(tnums)
+
+    for tn in tnums:
+        tree = df.loc[df.tree == tn]
+        last_id = check_main_branches(tree.loc[tree.TotalMass_mmp])
+        if last_id is not None:
+            last_a = tree.loc[tree.id == last_id].scale.values[0]
+            new_mmp = correct_mmp(tree, last_id)
+            msk = (df.tree == tn) & (df.scale <= last_a)
+            df.loc[msk, 'TotalMass_mmp'] = np.isin(df.loc[msk].index, new_mmp)
+    return df
 
 
 def make_tree_col(df, tnums):
