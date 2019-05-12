@@ -9,9 +9,9 @@ import pandas as pd
 try:
     from tqdm import tqdm
 except ImportError:
-    have_pbar = False
+    HAVE_PBAR = False
 else:
-    have_pbar = True
+    HAVE_PBAR = True
 
 
 def get_col_names(fname):
@@ -232,7 +232,7 @@ def verify_main_branches(df):
         Updated merger tree catalog with the correct main branches marked
     """
     tnums = df.tree.unique()
-    if have_pbar:
+    if HAVE_PBAR:
         tnums = tqdm(tnums)
 
     for tn in tnums:
@@ -271,7 +271,7 @@ def analyze_trees(fname, only_mb=False, slow_mb=False):
     df['tree'] = make_tree_col(df, tnums)
     if slow_mb:
         df['TotalMass_mmp'] = False
-        if have_pbar:
+        if HAVE_PBAR:
             tnums = tqdm(tnums)
         for tn in tnums:
             mmps = main_trees(df.loc[df.tree == tn])
@@ -310,7 +310,7 @@ def save_to_hdf5(fname, df, cosmo={}, tname="RockstarMergerTrees", min_vmax=0):
               " Exiting.".format(tname))
         sys.exit(1337)
     t = f.create_group(tname)
-    if have_pbar:
+    if HAVE_PBAR:
         treenums = tqdm(treenums)
     for i, tnum in enumerate(treenums):
         tg = t.create_group('Tree_' + str(tnum))
