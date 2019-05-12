@@ -159,9 +159,15 @@ def correct_mmp(df, prev_id):
         raise RuntimeError("`df.scale` is not descending.")
 
     prev_a = df.scale.values[(df.id == prev_id)][0]
-    a_uniq = df.scale[(df.scale < prev_a)].unique()
+    a_uniq = df.scale[(df.scale <= prev_a)].unique()
     mmp = np.zeros_like(a_uniq, dtype=int)
     for i, a in enumerate(a_uniq):
+        # Place index of previous halo in mmp to correct for duplicate
+        # halos occurring at the same timestep
+        if i == 0:
+            mmp[i] = df.loc[df.id == prev_id].index.values[0]
+            continue
+
         msk = (df.scale == a) & (df.desc_id == prev_id)
         if msk.sum() == 0:
             # We have reached the end of this main branch.
