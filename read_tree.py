@@ -15,13 +15,30 @@ else:
 
 
 def get_col_names(fname):
-    """Parses the first line of the file to get column names."""
+    """Parses the header to get column names and parameters."""
     with open(fname) as f:
         cols = f.readline().strip("#\n").lower()
         cols = (re.sub(r'\(\d+\)', '', cols)
                   .replace('/', '_to_')
                   .split())
         return cols
+
+
+def get_cosmo(fname):
+    """Gets the cosmological parameters from the header."""
+    grep_cosmo = Popen(['grep', '^#Omega_', str(fname)], stdout=PIPE)
+    grep_box = Popen(['grep', '^#Full box', str(fname)], stdout=PIPE)
+    cosmo_str = (grep_cosmo.communicate()[0]
+                           .decode("utf-8")
+                           .strip("#\n")
+                           .split("; "))
+    box_str = (grep_box.communicate()[0]
+                       .decode("utf-8")
+                       .strip("#\n")
+                       .split(" = "))
+    cosmo = {i.split(' = ')[0]: float(i.split(' = ')[1]) for i in cosmo_str}
+    cosmo['Box_size_Mpc/h'] = float(box_str[1].split()[0])
+    return cosmo
 
 
 def get_tree_nums(fname):
@@ -87,8 +104,8 @@ def main_trees_quick(df):
 
     Generally, this function will get most halos correctly marked as main
     progenitor halos. If a complete and accurate merger tree is required,
-    follow up with the `check_main_branches` and `correct_mmp` functions
-    to improve correctness.
+    do not use this function. The functions `check_main_branches` and
+    `correct_mmp` can be used to improve accuracy.
 
     There may still be errors if there are two halos, both of maximal mass,
     at the same timestep. This cannot be avoided while remaining quick, even
@@ -205,8 +222,8 @@ def read_data(fname, cols):
     """Loads consistent-trees file into pandas dataframe."""
     df = (pd.read_csv(fname, header=None, sep=r"\s+", comment="#",
                       names=cols, dtype=np.float64)
-            .iloc[1:])  # First line is the number of trees
-    # Could reset_index, but don't shuffle the DataFrame
+            .iloc[1:])  # First line is the total number of trees
+    # Could reset_index, but we don't shuffle the DataFrame
     return df
 
 
@@ -228,7 +245,7 @@ def analyze_trees(fname, only_mb=False):
     return df
 
 
-def save_to_hdf5(fname, df, tname="RockstarMergerTrees", min_vmax=0.):
+def save_to_hdf5(fname, df, cosmo={}, tname="RockstarMergerTrees", min_vmax=0):
     """Saves the merger trees mostly following IRATE practices.
 
     Parameters
@@ -237,6 +254,8 @@ def save_to_hdf5(fname, df, tname="RockstarMergerTrees", min_vmax=0.):
         Path to the output file
     df : DataFrame
         Merger tree catalog to be saved to `fname`
+    cosmo : dict-like, optional
+        Dictionary containing the simuation parameters used
     tname : str, optional
         HDF5 group name given to the merger trees inside of the file
     min_vmax : float, optional
@@ -257,6 +276,9 @@ def save_to_hdf5(fname, df, tname="RockstarMergerTrees", min_vmax=0.):
         for j, col in enumerate(colheads):
             col_data = df.loc[(df.tree == tnum), col].values
             tg.create_dataset(col, data=col_data)
+    head = f.create_group('Header')
+    for param in cosmo:
+        head.create_dataset(param, data=cosmo[param])
     f.close()
 
 
@@ -288,7 +310,10 @@ def add_z0_catalog(fname, df, snap=152, name="HaloCatalog_RockstarMergerTree"):
     )
     colheads = z0_cat.columns.values
     for col in colheads:
-        cat.create_dataset(col, data=z0_cat[col].values)
+        try:
+            cat.create_dataset(col, data=z0_cat[col].values)
+        except TypeError:  # No HDF5 datatype for object (e.g. 'center' above)
+            cat.create_dataset(col, data=np.vstack(z0_cat[col].values))
     f.close()
 
 
@@ -325,8 +350,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     start_time = time()
-    mt = analyze_trees(args.file, args.mb)
-    save_to_hdf5(args.outname, mt)
+    mt = analyze_trees(args.file, args.mb, args.quick)
+    cosmo = get_cosmo(args.file)
+    save_to_hdf5(args.outname, mt, cosmo)
     add_z0_catalog(args.outname, mt)
     total = time() - start_time
     if args.timing:
