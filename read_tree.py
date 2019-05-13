@@ -233,7 +233,7 @@ def verify_main_branches(df):
     """
     tnums = df.tree.unique()
     if HAVE_PBAR:
-        tnums = tqdm(tnums)
+        tnums = tqdm(tnums, desc='Verifying')
 
     for tn in tnums:
         tree = df.loc[df.tree == tn]
@@ -272,7 +272,7 @@ def analyze_trees(fname, only_mb=False, slow_mb=False):
     if slow_mb:
         df['TotalMass_mmp'] = False
         if HAVE_PBAR:
-            tnums = tqdm(tnums)
+            tnums = tqdm(tnums, desc='Main Branches')
         for tn in tnums:
             mmps = main_trees(df.loc[df.tree == tn])
             mmps = np.isin(df.loc[df.tree == tn].index, mmps)
@@ -311,7 +311,7 @@ def save_to_hdf5(fname, df, cosmo={}, tname="RockstarMergerTrees", min_vmax=0):
         sys.exit(1337)
     t = f.create_group(tname)
     if HAVE_PBAR:
-        treenums = tqdm(treenums)
+        treenums = tqdm(treenums, desc='Saving')
     for i, tnum in enumerate(treenums):
         tg = t.create_group('Tree_' + str(tnum))
         for j, col in enumerate(colheads):
